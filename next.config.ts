@@ -7,11 +7,10 @@ const nextConfig: NextConfig = {
   onDemandEntries: {
     // Opcional: configurar el overlay de errores
   },
-  // Configuración para Turbopack
-  experimental: {
-    turbo: {
-      // Configuraciones específicas de Turbopack si es necesario
-    }
+  // Configuración para Turbopack (nueva sintaxis)
+  turbopack: {
+    root: process.cwd(),
+    // Configuraciones específicas de Turbopack si es necesario
   }
 };
 
