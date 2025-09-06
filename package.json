@@ -4,18 +4,29 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev:turbo": "next dev --turbopack",
+    "build": "next build",
     "start": "next start"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
+    "axios": "^1.11.0",
+    "next": "15.5.2",
+    "nookies": "^2.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.2"
+    "simple-peer": "^9.11.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
+    "@types/nookies": "^1.1.0",
     "@types/react": "^19",
-    "@types/react-dom": "^19"
+    "@types/react-dom": "^19",
+    "@types/simple-peer": "^9.11.8",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5"
   }
 }
