@@ -49,6 +49,11 @@ export default function VideoPlayer({ stream, className = '' }: VideoPlayerProps
     // Asignar el stream al elemento video
     video.srcObject = stream;
 
+    // Configurar atributos importantes del video
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = false; // No silenciar para streams remotos
+
     // Listeners para eventos del video
     const handleLoadedMetadata = () => {
       console.log('✅ VideoPlayer: Metadata cargada');

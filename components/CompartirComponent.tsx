@@ -1,8 +1,9 @@
 import { useRouter } from 'next/router';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import SimplePeer from 'simple-peer';
 import { AuthContext } from '../context/AuthContext';
+import VideoPlayer from './VideoPlayer';
 
 interface User {
   id: number;
@@ -25,6 +26,26 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
   const [peers, setPeers] = useState<Map<string, SimplePeer.Instance>>(new Map());
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [activePeerConnections, setActivePeerConnections] = useState<Set<string>>(new Set());
+  
+  // Ref para mantener la referencia actual del stream
+  const localStreamRef = useRef<MediaStream | null>(null);
+  
+  // Ref para mantener la referencia actual de peers
+  const peersRef = useRef<Map<string, SimplePeer.Instance>>(new Map());
+  
+  // Set para rastrear señales procesadas y evitar duplicados
+  const processedSignalsRef = useRef<Set<string>>(new Set());
+
+  // useEffect para actualizar la ref cuando cambie localStream
+  useEffect(() => {
+    localStreamRef.current = localStream;
+    console.log('🔄 Stream ref actualizada:', !!localStream);
+  }, [localStream]);
+
+  // useEffect para actualizar la ref cuando cambien los peers
+  useEffect(() => {
+    peersRef.current = peers;
+  }, [peers]);
 
   // Verificar que el contexto esté disponible
   if (!authContext) {
@@ -40,9 +61,11 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       return;
     }
 
-    console.log('🔄 Inicializando conexión Socket.IO...');
-    console.log('🔍 Token:', token.substring(0, 20) + '...');
-    console.log('🔍 Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Inicializando conexión Socket.IO...');
+      console.log('🔍 Token:', token.substring(0, 20) + '...');
+      console.log('🔍 Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+    }
 
     // Establecer conexión con el servidor Socket.IO
     const newSocket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', {
@@ -79,12 +102,15 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
         return;
       }
       
-      // Obtener el stream actual del estado
-      const currentStream = localStream;
-      console.log('🔍 Stream actual:', currentStream);
+      // Obtener el stream actual de la ref (siempre actualizada)
+      const currentStream = localStreamRef.current;
+      console.log('🔍 Stream actual (ref):', currentStream);
+      console.log('🔍 Estado localStream (state):', !!localStream);
+      console.log('🔍 Stream activo:', currentStream?.active);
       
-      if (!currentStream) {
+      if (!currentStream || !currentStream.active) {
         console.warn('❌ No hay stream local disponible para compartir');
+        console.warn('💡 El admin deberá esperar a que se inicie la compartición de pantalla');
         return;
       }
 
@@ -107,6 +133,7 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       // Listener para señales WebRTC
       peer.on('signal', (signal) => {
         console.log('📡 Enviando señal WebRTC al admin:', data.adminSocketId);
+        console.log('📦 Tipo de señal:', signal.type);
         // Enviar señal al servidor para que la reenvíe al admin
         newSocket.emit('sending-signal', {
           signal: signal,
@@ -145,20 +172,49 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
 
     // Listener para respuesta de señal del admin
     newSocket.on('return-signal-received', (data: { signal: any, adminSocketId: string }) => {
-      console.log('Señal de respuesta recibida del admin:', data.adminSocketId);
+      console.log('📡 Señal de respuesta recibida del admin:', data.adminSocketId);
+      console.log('📦 Tipo de señal:', data.signal.type);
       
-      // Buscar el peer correspondiente al admin
-      setPeers(prevPeers => {
-        const peer = prevPeers.get(data.adminSocketId);
-        if (peer) {
-          // Completar la conexión WebRTC
+      // Crear un ID único para esta señal para evitar procesamiento duplicado
+      const signalId = `${data.adminSocketId}-${data.signal.type}-${Date.now()}`;
+      
+      // Verificar si ya procesamos una señal similar recientemente
+      if (processedSignalsRef.current.has(`${data.adminSocketId}-${data.signal.type}`)) {
+        console.warn('⚠️ Señal duplicada detectada, ignorando:', data.adminSocketId, data.signal.type);
+        return;
+      }
+      
+      // Marcar como procesada
+      processedSignalsRef.current.add(`${data.adminSocketId}-${data.signal.type}`);
+      
+      // Limpiar señales antiguas después de 5 segundos
+      setTimeout(() => {
+        processedSignalsRef.current.delete(`${data.adminSocketId}-${data.signal.type}`);
+      }, 5000);
+      
+      // Buscar el peer correspondiente al admin usando la ref actual
+      const currentPeers = peersRef.current || new Map();
+      const peer = currentPeers.get(data.adminSocketId);
+      
+      if (peer && !peer.destroyed) {
+        try {
+          // Verificar el estado actual del peer antes de procesar la señal
+          console.log('🔍 Estado del peer antes de procesar:', peer.connected, peer.destroyed);
+          
           peer.signal(data.signal);
-          console.log('Conexión WebRTC completada con admin:', data.adminSocketId);
-        } else {
-          console.warn('No se encontró peer para admin:', data.adminSocketId);
+          console.log('✅ Conexión WebRTC completada con admin:', data.adminSocketId);
+        } catch (error) {
+          console.error('❌ Error al procesar señal de respuesta:', error);
+          // Limpiar el peer que falló
+          setPeers(prevPeers => {
+            const newPeers = new Map(prevPeers);
+            newPeers.delete(data.adminSocketId);
+            return newPeers;
+          });
         }
-        return prevPeers;
-      });
+      } else {
+        console.warn('⚠️ No se encontró peer válido para admin:', data.adminSocketId);
+      }
     });
 
     // Guardar socket en el estado
@@ -233,8 +289,8 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
 
       // Agregar listener para cuando el usuario detenga la compartición
       stream.getVideoTracks()[0].addEventListener('ended', () => {
-        console.log('📺 Usuario detuvo la compartición de pantalla');
-        setLocalStream(null);
+        console.log('📺 Usuario detuvo la compartición de pantalla manualmente');
+        stopSharing(); // Usar la función centralizada
       });
 
       // Notificar al servidor que estamos listos para conexiones
@@ -246,6 +302,16 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       console.log('📡 Evento participant-ready enviado al servidor');
 
       console.log('🎉 Pantalla compartida exitosamente');
+
+      // Una vez que tenemos el stream, procesar cualquier solicitud de admin pendiente
+      if (socket) {
+        socket.emit('participant-stream-ready', {
+          userId: user.id,
+          email: user.email,
+          teamId: user.teamId
+        });
+        console.log('📡 Evento participant-stream-ready enviado - listo para conexiones WebRTC');
+      }
 
     } catch (error: any) {
       console.error('❌ Error al compartir pantalla:', error);
@@ -268,6 +334,59 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
     shareScreen();
   };
 
+  const handleStopSharing = () => {
+    // Mostrar confirmación antes de detener
+    const confirmStop = window.confirm(
+      '¿Estás seguro de que quieres dejar de compartir tu pantalla?\n\n' +
+      'Esto terminará la transmisión para todos los administradores que te estén observando.'
+    );
+
+    if (confirmStop) {
+      console.log('🛑 Usuario decidió detener la compartición');
+      stopSharing();
+    }
+  };
+
+  const stopSharing = () => {
+    console.log('🔴 Deteniendo compartición de pantalla...');
+
+    // Detener todas las pistas del stream
+    if (localStream) {
+      localStream.getTracks().forEach(track => {
+        console.log('⏹️ Deteniendo track:', track.kind);
+        track.stop();
+      });
+      setLocalStream(null);
+    }
+
+    // Cerrar todas las conexiones WebRTC activas
+    if (peers.size > 0) {
+      console.log('🔌 Cerrando', peers.size, 'conexiones WebRTC...');
+      peers.forEach((peer, adminSocketId) => {
+        console.log('📴 Cerrando conexión con admin:', adminSocketId);
+        if (!peer.destroyed) {
+          peer.destroy();
+        }
+      });
+      setPeers(new Map());
+    }
+
+    // Limpiar conexiones activas
+    setActivePeerConnections(new Set());
+
+    // Notificar al servidor que ya no estamos transmitiendo
+    if (socket) {
+      socket.emit('participant-stopped-sharing', {
+        userId: user.id,
+        email: user.email,
+        teamId: user.teamId
+      });
+      console.log('📡 Notificación de detención enviada al servidor');
+    }
+
+    console.log('✅ Compartición detenida exitosamente');
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="container mx-auto px-4 py-8">
@@ -285,24 +404,41 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
         </div>
         
         <div className="flex flex-col items-center justify-center space-y-8">
-          {/* Botón principal para compartir pantalla */}
-          <div className="text-center">
-            <button
-              onClick={handleStartSharing}
-              disabled={!!localStream}
-              className={`px-12 py-6 text-white text-xl font-bold rounded-xl shadow-2xl transform transition duration-200 focus:outline-none focus:ring-4 ${
-                localStream 
-                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-300' 
-                  : isConnected
+          {/* Botones para compartir pantalla */}
+          <div className="text-center space-y-4">
+            {!localStream ? (
+              // Botón para iniciar compartición
+              <button
+                onClick={handleStartSharing}
+                disabled={!isConnected}
+                className={`px-12 py-6 text-white text-xl font-bold rounded-xl shadow-2xl transform transition duration-200 focus:outline-none focus:ring-4 ${
+                  isConnected
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 hover:scale-105 focus:ring-blue-300'
                     : 'bg-gray-600 cursor-not-allowed'
-              }`}
-            >
-              {localStream ? '✅ Pantalla Compartida' : '🖥️ Empezar a Compartir Pantalla'}
-            </button>
+                }`}
+              >
+                🖥️ Empezar a Compartir Pantalla
+              </button>
+            ) : (
+              // Botones cuando está compartiendo
+              <div className="space-y-4">
+                <div className="flex items-center justify-center space-x-2 mb-4">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-lg font-semibold text-green-400">✅ Transmitiendo en vivo</span>
+                </div>
+                
+                <button
+                  onClick={handleStopSharing}
+                  className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white text-lg font-bold rounded-xl shadow-2xl transform transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-300 hover:scale-105"
+                >
+                  🛑 Detener Compartición
+                </button>
+              </div>
+            )}
+            
             <p className="text-gray-400 mt-4 text-sm">
               {localStream 
-                ? 'Tu pantalla se está transmitiendo' 
+                ? 'Tu pantalla se está transmitiendo a los administradores' 
                 : isConnected 
                   ? 'Haz clic para comenzar la transmisión de tu pantalla'
                   : 'Conectando al servidor...'
@@ -335,14 +471,46 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
                   {isConnected ? 'Conectado' : 'Desconectado'}
                 </span>
               </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <div className={`w-3 h-3 rounded-full ${localStream ? 'bg-blue-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                <span className="text-gray-300">
+                  {localStream ? 'Transmitiendo' : 'Sin transmisión'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <div className={`w-3 h-3 rounded-full ${peers.size > 0 ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                <span className="text-gray-300">
+                  {peers.size > 0 ? `${peers.size} administrador${peers.size > 1 ? 'es' : ''} observando` : 'Ningún administrador observando'}
+                </span>
+              </div>
               <p className="text-gray-400 text-sm mt-2">
-                {isConnected 
-                  ? 'Listo para transmitir' 
-                  : 'Conectando al servidor...'
+                {localStream 
+                  ? `Transmisión activa${peers.size > 0 ? ` para ${peers.size} observador${peers.size > 1 ? 'es' : ''}` : ''}`
+                  : isConnected 
+                    ? 'Listo para transmitir' 
+                    : 'Conectando al servidor...'
                 }
               </p>
             </div>
           </div>
+
+          {/* Vista previa local */}
+          {localStream && (
+            <div className="w-full max-w-4xl">
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h2 className="text-xl font-semibold mb-4">Vista Previa de tu Pantalla</h2>
+                <div className="relative bg-black rounded-lg overflow-hidden">
+                  <VideoPlayer 
+                    stream={localStream} 
+                    className="w-full h-64 object-contain" 
+                  />
+                  <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded text-sm">
+                    EN VIVO
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
