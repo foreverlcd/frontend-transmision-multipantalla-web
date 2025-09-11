@@ -61,7 +61,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
     if (categoryParam) {
       const categoryId = parseInt(categoryParam as string, 10);
-      if (!isNaN(categoryId)) {
+      if (!isNaN(categoryId) && categoryId >= 0) {
         selectedCategory = categoryId;
       }
     }

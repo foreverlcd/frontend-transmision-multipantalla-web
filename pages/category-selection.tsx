@@ -24,19 +24,26 @@ interface Category {
   color: string;
 }
 
-// Categorías predefinidas (puedes modificar según tus necesidades)
+// Categorías predefinidas (usando IDs reales de la base de datos)
 const CATEGORIES: Category[] = [
   {
-    id: 1,
-    name: 'Equipo A',
-    description: 'Transmisiones del Equipo A',
+    id: 0,
+    name: 'Todas las Categorías',
+    description: 'Ver transmisiones de todos los equipos',
+    icon: '🌐',
+    color: 'bg-green-600 hover:bg-green-700'
+  },
+  {
+    id: 8,
+    name: 'Desarrollo Frontend',
+    description: 'Transmisiones del equipo de Frontend',
     icon: '🔴',
     color: 'bg-red-600 hover:bg-red-700'
   },
   {
-    id: 2,
-    name: 'Equipo B', 
-    description: 'Transmisiones del Equipo B',
+    id: 9,
+    name: 'Desarrollo Backend', 
+    description: 'Transmisiones del equipo de Backend',
     icon: '🔵',
     color: 'bg-blue-600 hover:bg-blue-700'
   }

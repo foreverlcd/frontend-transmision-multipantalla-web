@@ -33,6 +33,16 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
   // Ref para mantener la referencia actual de peers
   const peersRef = useRef<Map<string, SimplePeer.Instance>>(new Map());
   
+  // Ref para mantener el token estable y evitar re-renders innecesarios
+  const tokenRef = useRef<string | null>(null);
+  
+  // Actualizar tokenRef cuando cambie el token del contexto
+  useEffect(() => {
+    if (authContext?.token) {
+      tokenRef.current = authContext.token;
+    }
+  }, [authContext?.token]);
+  
   // Set para rastrear señales procesadas y evitar duplicados
   const processedSignalsRef = useRef<Set<string>>(new Set());
 
@@ -56,21 +66,29 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
 
   // useEffect para establecer conexión Socket.IO
   useEffect(() => {
-    if (!token) {
+    const currentToken = tokenRef.current;
+    
+    if (!currentToken) {
       console.log('❌ No hay token disponible');
+      return;
+    }
+
+    // Si ya hay un socket conectado, no crear uno nuevo
+    if (socket && socket.connected) {
+      console.log('✅ Socket ya conectado, evitando reconexión');
       return;
     }
 
     if (process.env.NODE_ENV === 'development') {
       console.log('🔄 Inicializando conexión Socket.IO...');
-      console.log('🔍 Token:', token.substring(0, 20) + '...');
+      console.log('🔍 Token:', currentToken.substring(0, 20) + '...');
       console.log('🔍 Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
     }
 
     // Establecer conexión con el servidor Socket.IO
     const newSocket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001', {
       auth: {
-        token: token
+        token: currentToken
       }
     });
 
@@ -98,7 +116,8 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       
       // Verificar si ya existe una conexión con este admin
       if (activePeerConnections.has(data.adminSocketId)) {
-        console.log('⚠️ Ya existe una conexión con este admin, ignorando solicitud duplicada');
+        console.log('⚠️ Ya existe una conexión con este admin:', data.adminSocketId);
+        console.log('🔍 Conexiones activas:', Array.from(activePeerConnections));
         return;
       }
       
@@ -144,12 +163,27 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       // Listener para errores del peer
       peer.on('error', (error) => {
         console.error('❌ Error en conexión WebRTC:', error);
+        console.error('🔍 Detalles del error:', {
+          name: error.name,
+          message: error.message,
+          adminId: data.adminSocketId
+        });
+        
         // Limpiar conexión en caso de error
         setActivePeerConnections(prev => {
           const newSet = new Set(prev);
           newSet.delete(data.adminSocketId);
           return newSet;
         });
+
+        // Destruir el peer para liberar recursos
+        if (!peer.destroyed) {
+          try {
+            peer.destroy();
+          } catch (destroyError) {
+            console.warn('⚠️ Error al destruir peer:', destroyError);
+          }
+        }
       });
 
       // Listener para cuando la conexión se cierre
@@ -239,7 +273,7 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
       // Desconectar socket
       newSocket.disconnect();
     };
-  }, [token]); // Dependencias: solo token (eliminamos localStream y peers para evitar loops)
+  }, []); // Sin dependencias - se ejecuta solo una vez al montar
 
   // Función para compartir pantalla
   const shareScreen = async () => {
@@ -305,6 +339,12 @@ export default function CompartirComponent({ user }: CompartirComponentProps) {
 
       // Una vez que tenemos el stream, procesar cualquier solicitud de admin pendiente
       if (socket) {
+        console.log('📡 ENVIANDO participant-stream-ready con datos:', {
+          userId: user.id,
+          email: user.email,
+          teamId: user.teamId
+        });
+        
         socket.emit('participant-stream-ready', {
           userId: user.id,
           email: user.email,

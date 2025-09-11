@@ -6,12 +6,11 @@ import { AuthContext } from '../context/AuthContext';
 import VideoPlayer from './VideoPlayer';
 
 interface StreamData {
-  streamId: string;
+  id: string;
   stream: MediaStream;
   participantId: string;
   participantEmail: string;
   participantTeamId: number | null;
-  participantCategoryId: number | null;
   socketId: string;
   createdAt: Date;
 }
@@ -38,17 +37,8 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
   const [streams, setStreams] = useState<{ [streamId: string]: StreamData }>({});
   const [participants, setParticipants] = useState<{ [socketId: string]: any }>({});
   const [watchingStreams, setWatchingStreams] = useState<Set<string>>(new Set());
-  const [connectingParticipants, setConnectingParticipants] = useState<Set<string>>(new Set());
   
   const processedSignalsRef = useRef<Set<string>>(new Set());
-  
-  // REF para participants para evitar problemas de closure
-  const participantsRef = useRef<{ [socketId: string]: any }>({});
-  
-  // Actualizar ref cuando cambie participants
-  useEffect(() => {
-    participantsRef.current = participants;
-  }, [participants]);
 
   if (!authContext) {
     throw new Error('MonitorComponent debe estar dentro de un AuthProvider');
@@ -80,12 +70,6 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
       return;
     }
 
-    // Verificar si ya está en proceso de conexión
-    if (connectingParticipants.has(participantSocketId)) {
-      console.warn('⚠️ Ya hay una conexión en progreso con este participante');
-      return;
-    }
-
     const participant = participants[participantSocketId];
     if (!participant) {
       console.error('❌ Participante no encontrado:', participantSocketId);
@@ -97,37 +81,16 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
       return;
     }
 
-    // Verificar si ya hay una conexión activa
-    if (peers[participantSocketId] && !peers[participantSocketId].destroyed) {
+    if (peers[participantSocketId]) {
       console.warn('⚠️ Ya hay una conexión activa con este participante');
       return;
     }
-
-    // Limpiar cualquier peer anterior destruido
-    if (peers[participantSocketId] && peers[participantSocketId].destroyed) {
-      console.log('🧹 Limpiando peer destruido previo');
-      const newPeers = { ...peers };
-      delete newPeers[participantSocketId];
-      setPeers(newPeers);
-    }
-
-    // Marcar como conectando
-    setConnectingParticipants(prev => new Set(prev).add(participantSocketId));
 
     console.log('📡 Solicitando conexión WebRTC...');
     socket.emit('admin-wants-to-connect', { participantSocketId });
     
     setWatchingStreams(prev => new Set(prev).add(participantSocketId));
     saveWatchingState(participantSocketId);
-
-    // Limpiar estado de "conectando" después de un timeout
-    setTimeout(() => {
-      setConnectingParticipants(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(participantSocketId);
-        return newSet;
-      });
-    }, 5000); // 5 segundos timeout
   };
 
   // FUNCIÓN PRINCIPAL: Dejar de observar participante
@@ -141,38 +104,23 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
     });
     removeWatchingState(participantSocketId);
     
-    // Cerrar peer connection de forma segura
     const peer = peers[participantSocketId];
-    if (peer) {
-      if (!peer.destroyed) {
-        console.log('🔌 Cerrando peer connection para:', participantSocketId);
-        try {
-          peer.destroy();
-        } catch (error) {
-          console.warn('⚠️ Error al cerrar peer:', error);
-        }
-      }
-      
-      // Actualizar estado de peers
-      setPeers(prev => {
-        const newPeers = { ...prev };
-        delete newPeers[participantSocketId];
-        return newPeers;
-      });
+    if (peer && !peer.destroyed) {
+      peer.destroy();
     }
+    setPeers(prev => {
+      const newPeers = { ...prev };
+      delete newPeers[participantSocketId];
+      return newPeers;
+    });
 
-    // Limpiar streams relacionados
     setStreams(prev => {
       const newStreams = { ...prev };
-      let removedCount = 0;
       Object.keys(newStreams).forEach(streamId => {
         if (newStreams[streamId].socketId === participantSocketId) {
-          console.log('🗑️ Removiendo stream:', streamId);
           delete newStreams[streamId];
-          removedCount++;
         }
       });
-      console.log(`✅ ${removedCount} streams removidos para participante ${participantSocketId}`);
       return newStreams;
     });
 
@@ -188,27 +136,6 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
     );
   };
 
-  // Función para limpiar streams duplicados del mismo participante
-  const cleanupDuplicateStreams = (participantSocketId: string, keepStreamId?: string) => {
-    console.log('🧹 Limpiando streams duplicados para participante:', participantSocketId);
-    
-    setStreams(prevStreams => {
-      const newStreams = { ...prevStreams };
-      let removedCount = 0;
-      
-      Object.keys(newStreams).forEach(streamId => {
-        if (newStreams[streamId].socketId === participantSocketId && streamId !== keepStreamId) {
-          console.log('🗑️ Removiendo stream duplicado:', streamId);
-          delete newStreams[streamId];
-          removedCount++;
-        }
-      });
-      
-      console.log(`✅ ${removedCount} streams duplicados removidos`);
-      return newStreams;
-    });
-  };
-
   // Función para filtrar participantes por categoría
   const getFilteredParticipants = () => {
     console.log('🔍 Filtrando participantes - categoría seleccionada:', selectedCategory);
@@ -221,8 +148,8 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
 
     const filtered: { [socketId: string]: any } = {};
     Object.entries(participants).forEach(([socketId, userData]) => {
-      console.log(`🔍 Participante ${userData.email}: categoryId ${userData.categoryId}, categoria buscada: ${selectedCategory}`);
-      if (userData.categoryId === selectedCategory) {
+      console.log(`🔍 Participante ${userData.email}: teamId ${userData.teamId}, categoria buscada: ${selectedCategory}`);
+      if (userData.teamId === selectedCategory) {
         filtered[socketId] = userData;
       }
     });
@@ -231,33 +158,11 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
     return filtered;
   };
 
-  // Función para filtrar streams por categoría
-  const getFilteredStreams = () => {
-    console.log('🔍 Filtrando streams - categoría seleccionada:', selectedCategory);
-    console.log('🔍 Streams disponibles:', streams);
-    
-    if (!selectedCategory || selectedCategory === 0) {
-      console.log('📺 Mostrando todos los streams');
-      return streams;
-    }
-
-    const filtered: { [streamId: string]: StreamData } = {};
-    Object.entries(streams).forEach(([streamId, streamData]) => {
-      console.log(`🔍 Stream ${streamData.participantEmail}: categoryId ${streamData.participantCategoryId}, categoria buscada: ${selectedCategory}`);
-      if (streamData.participantCategoryId === selectedCategory) {
-        filtered[streamId] = streamData;
-      }
-    });
-    
-    console.log('📺 Streams filtrados:', filtered);
-    return filtered;
-  };
-
   const getCategoryName = (categoryId: number | null): string => {
     if (!categoryId || categoryId === 0) return 'Todas las Categorías';
     switch (categoryId) {
-      case 8: return 'Desarrollo Frontend';
-      case 9: return 'Desarrollo Backend';
+      case 1: return 'Equipo A';
+      case 2: return 'Equipo B';
       default: return `Categoría ${categoryId}`;
     }
   };
@@ -285,69 +190,44 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
       console.error('❌ Error de conexión Socket.IO:', error);
     });
 
-    // DEBUG: Escuchar TODOS los eventos para diagnosticar
-    const originalOn = newSocket.on.bind(newSocket);
-    newSocket.on = function(event: string, listener: any) {
-      const wrappedListener = (...args: any[]) => {
-        console.log(`🔔 EVENTO RECIBIDO: ${event}`, args);
-        return listener(...args);
-      };
-      return originalOn(event, wrappedListener);
-    };
-
     // Lista inicial de participantes
     newSocket.on('participants-list', (participantsList: Array<{ socketId: string, userData: any }>) => {
       console.log('📋 Lista inicial de participantes recibida:', participantsList.length);
-      console.log('📋 Detalles de participantes:', participantsList);
       
       const participantsObj: { [socketId: string]: any } = {};
       participantsList.forEach(participant => {
-        console.log(`👤 Procesando participante:`, participant.socketId, participant.userData);
-        console.log(`📺 Stream disponible:`, participant.userData.streamAvailable);
-        
+        console.log('👤 Participante en lista:', participant.socketId, participant.userData);
         participantsObj[participant.socketId] = {
           ...participant.userData,
-          streamAvailable: participant.userData.streamAvailable || false
+          streamAvailable: false
         };
       });
       
       setParticipants(participantsObj);
-      console.log('✅ Participantes establecidos:', participantsObj);
     });
 
     // Nuevo participante se une
     newSocket.on('user-joined', (data: { socketId: string, userData: any }) => {
       console.log('🎉 Participante se unió:', data.socketId, data.userData);
       
-      setParticipants(prevParticipants => {
-        const updated = {
-          ...prevParticipants,
-          [data.socketId]: {
-            ...data.userData,
-            streamAvailable: false // Por defecto false hasta que comparta
-          }
-        };
-        console.log('✅ Participantes actualizados:', updated);
-        return updated;
-      });
+      setParticipants(prevParticipants => ({
+        ...prevParticipants,
+        [data.socketId]: data.userData
+      }));
     });
 
-    // CRÍTICO: Stream disponible
+    // Stream disponible
     newSocket.on('participant-stream-available', (data: { socketId: string, userData: any }) => {
-      console.log('� EVENTO CRÍTICO: Stream disponible para participante:', data.socketId, data.userData);
+      console.log('📺 Stream disponible para participante:', data.socketId, data.userData);
       
-      setParticipants(prevParticipants => {
-        const updated = {
-          ...prevParticipants,
-          [data.socketId]: {
-            ...prevParticipants[data.socketId],
-            ...data.userData,
-            streamAvailable: true
-          }
-        };
-        console.log('✅ Participante marcado con stream disponible:', updated[data.socketId]);
-        return updated;
-      });
+      setParticipants(prevParticipants => ({
+        ...prevParticipants,
+        [data.socketId]: {
+          ...prevParticipants[data.socketId],
+          ...data.userData,
+          streamAvailable: true
+        }
+      }));
 
       // Auto-reconectar si estaba observando
       if (watchingStreams.has(data.socketId)) {
@@ -356,51 +236,21 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
       }
     });
 
-    // AÑADIR: Listener para cuando stream se detiene
-    newSocket.on('participant-stopped-sharing', (data: { socketId: string, userData: any }) => {
-      console.log('🔴 EVENTO: Participante detuvo compartición:', data.socketId, data.userData);
-      
-      setParticipants(prevParticipants => {
-        const updated = {
-          ...prevParticipants,
-          [data.socketId]: {
-            ...prevParticipants[data.socketId],
-            ...data.userData,
-            streamAvailable: false
-          }
-        };
-        console.log('✅ Participante marcado SIN stream:', updated[data.socketId]);
-        return updated;
-      });
-    });
-
     // Señales WebRTC
     newSocket.on('receiving-signal', (data: { signal: any, participantSocketId: string }) => {
       console.log('📡 Señal WebRTC recibida del participante:', data.participantSocketId);
       
-      // Verificar si ya existe un peer para este participante
       if (peers[data.participantSocketId]) {
         const existingPeer = peers[data.participantSocketId];
         if (!existingPeer.destroyed) {
           try {
-            console.log('🔄 Usando peer existente para:', data.participantSocketId);
             existingPeer.signal(data.signal);
-            console.log('✅ Handshake WebRTC completado con peer existente');
+            console.log('✅ Handshake WebRTC completado');
           } catch (error) {
-            console.error('❌ Error al procesar señal WebRTC en peer existente:', error);
-            // Si falla, eliminar el peer existente y crear uno nuevo
-            existingPeer.destroy();
-            delete peers[data.participantSocketId];
+            console.error('❌ Error al procesar señal WebRTC:', error);
           }
-        } else {
-          // Peer existente está destruido, eliminarlo
-          delete peers[data.participantSocketId];
         }
-        
-        // Si después de la limpieza aún existe un peer válido, salir
-        if (peers[data.participantSocketId] && !peers[data.participantSocketId].destroyed) {
-          return;
-        }
+        return;
       }
       
       console.log('🆕 Creando nuevo peer para participante:', data.participantSocketId);
@@ -433,56 +283,18 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
           audioTracks: stream.getAudioTracks().length
         });
         
-        // Usar participantsRef.current para obtener el valor actual
-        const currentParticipants = participantsRef.current;
-        const participantData = currentParticipants[data.participantSocketId];
-        
-        console.log('🔍 DEBUG - Verificando participante:');
-        console.log('  - participantSocketId:', data.participantSocketId);
-        console.log('  - currentParticipants keys:', Object.keys(currentParticipants));
-        console.log('  - participant data found:', !!participantData);
-        console.log('  - participant data:', participantData);
-        
-        if (!participantData) {
-          console.warn('⚠️ No se encontró información del participante:', data.participantSocketId);
-          console.warn('📋 Participantes disponibles:', Object.keys(currentParticipants));
-          // Intentar recargar la lista de participantes
-          if (socket) {
-            console.log('🔄 Solicitando lista actualizada de participantes...');
-            socket.emit('request-participants-list');
-          }
-          // NO hacer return, crear el stream con datos mínimos
-        }
-        
-        // ID único que incluye el socket del admin para evitar duplicados
-        const adminSocketId = socket?.id || newSocket?.id || 'fallback';
-        const streamId = `${data.participantSocketId}_${adminSocketId}_${Date.now()}`;
-        
-        console.log('🔍 DEBUG - Generando streamId:', {
-          participantSocketId: data.participantSocketId,
-          adminSocketId: adminSocketId,
-          socketAvailable: !!socket,
-          socketId: socket?.id,
-          newSocketId: newSocket?.id,
-          timestamp: Date.now(),
-          finalStreamId: streamId
-        });
-        
-        // Limpiar streams duplicados antes de agregar el nuevo
-        cleanupDuplicateStreams(data.participantSocketId, streamId);
+        // ID único simple
+        const streamId = `${data.participantSocketId}_${Date.now()}`;
         
         const streamData: StreamData = {
-          streamId: streamId,
+          id: streamId,
           stream: stream,
-          participantId: participantData?.id?.toString() || data.participantSocketId,
-          participantEmail: participantData?.email || 'Participante desconocido',
-          participantTeamId: participantData?.teamId || null,
-          participantCategoryId: participantData?.categoryId || null,
+          participantId: participants[data.participantSocketId]?.id?.toString() || 'unknown',
+          participantEmail: participants[data.participantSocketId]?.email || 'unknown',
+          participantTeamId: participants[data.participantSocketId]?.teamId || null,
           socketId: data.participantSocketId,
           createdAt: new Date()
         };
-        
-        console.log('🔍 DEBUG - streamData creado:', streamData);
         
         setStreams(prevStreams => ({
           ...prevStreams,
@@ -494,48 +306,10 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
 
       peer.on('error', (error) => {
         console.error('❌ Error en conexión WebRTC:', error);
-        console.error('🔍 Detalles del error:', {
-          name: error.name,
-          message: error.message,
-          participantId: data.participantSocketId
-        });
-        
-        // No eliminar inmediatamente el peer, podría recuperarse
-        // setPeers(prevPeers => {
-        //   const newPeers = { ...prevPeers };
-        //   delete newPeers[data.participantSocketId];
-        //   return newPeers;
-        // });
-      });
-
-      peer.on('close', () => {
-        console.log('🔌 Conexión WebRTC cerrada con participante:', data.participantSocketId);
         setPeers(prevPeers => {
           const newPeers = { ...prevPeers };
           delete newPeers[data.participantSocketId];
           return newPeers;
-        });
-        
-        // Limpiar streams del participante
-        setStreams(prevStreams => {
-          const newStreams = { ...prevStreams };
-          Object.keys(newStreams).forEach(streamId => {
-            if (newStreams[streamId].socketId === data.participantSocketId) {
-              delete newStreams[streamId];
-            }
-          });
-          return newStreams;
-        });
-      });
-
-      peer.on('connect', () => {
-        console.log('🎉 Conexión WebRTC establecida con participante:', data.participantSocketId);
-        
-        // Limpiar estado de "conectando" cuando se establece la conexión
-        setConnectingParticipants(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(data.participantSocketId);
-          return newSet;
         });
       });
 
@@ -595,34 +369,11 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
     return () => {
       console.log('🧹 Desconectando socket y cerrando conexiones WebRTC...');
       newSocket.disconnect();
-      
-      // Cerrar todas las conexiones peer
       Object.values(peers).forEach(peer => {
         if (peer && !peer.destroyed) {
           peer.destroy();
         }
       });
-      
-      // Limpiar todos los streams del admin actual
-      const adminSocketId = newSocket?.id;
-      if (adminSocketId) {
-        console.log('🧹 Limpiando streams del admin:', adminSocketId);
-        setStreams(prevStreams => {
-          const newStreams = { ...prevStreams };
-          let removedCount = 0;
-          
-          Object.keys(newStreams).forEach(streamId => {
-            if (streamId.includes(adminSocketId)) {
-              console.log('🗑️ Removiendo stream del admin desconectado:', streamId);
-              delete newStreams[streamId];
-              removedCount++;
-            }
-          });
-          
-          console.log(`✅ ${removedCount} streams del admin removidos en cleanup`);
-          return newStreams;
-        });
-      }
     };
   }, [token, selectedCategory]);
 
@@ -695,17 +446,6 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
               >
                 🔍 Debug
               </button>
-              <button
-                onClick={() => {
-                  if (socket) {
-                    console.log('🔄 Solicitando lista actualizada de participantes...');
-                    socket.emit('request-participants-list');
-                  }
-                }}
-                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm"
-              >
-                🔄 Refrescar Lista
-              </button>
             </div>
             <div className="space-y-3">
               {(() => {
@@ -733,7 +473,6 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
                         <div className={`w-2 h-2 rounded-full ${(userData as any).streamAvailable ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                       </div>
                       <p className="text-gray-400 text-sm">
-                        Categoría: {getCategoryName(userData.categoryId)} | 
                         Equipo: {userData.teamId ? `#${userData.teamId}` : 'Sin asignar'}
                       </p>
                       <p className="text-gray-500 text-xs">
@@ -753,20 +492,14 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
                       ) : (
                         <button
                           onClick={() => startWatching(socketId)}
-                          disabled={!(userData as any).streamAvailable || connectingParticipants.has(socketId)}
+                          disabled={!(userData as any).streamAvailable}
                           className={`px-3 py-1 rounded text-sm font-medium transition ${
-                            connectingParticipants.has(socketId)
-                              ? 'bg-yellow-600 text-white cursor-wait'
-                              : (userData as any).streamAvailable
+                            (userData as any).streamAvailable
                               ? 'bg-blue-600 hover:bg-blue-700 text-white'
                               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           }`}
                         >
-                          {connectingParticipants.has(socketId) 
-                            ? 'Conectando...' 
-                            : (userData as any).streamAvailable 
-                            ? 'Observar' 
-                            : 'Sin stream'}
+                          {(userData as any).streamAvailable ? 'Observar' : 'Sin stream'}
                         </button>
                       )}
                     </div>
@@ -777,39 +510,19 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
           </div>
           
           <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              Streams en Vivo - {getCategoryName(selectedCategory)}
-            </h2>
+            <h2 className="text-xl font-semibold mb-4">Streams en Vivo</h2>
             <div className="space-y-4">
-              {(() => {
-                const filteredStreams = getFilteredStreams();
-                const filteredStreamKeys = Object.keys(filteredStreams);
-                
-                if (filteredStreamKeys.length === 0) {
-                  return (
-                    <div className="text-center py-8">
-                      <p className="text-gray-400">
-                        {Object.keys(streams).length === 0 
-                          ? 'No hay streams activos'
-                          : `No hay streams activos en ${getCategoryName(selectedCategory)}`
-                        }
-                      </p>
-                    </div>
-                  );
-                }
-                
-                return Object.entries(filteredStreams).map(([streamId, streamData]) => (
+              {Object.keys(streams).length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-400">No hay streams activos</p>
+                </div>
+              ) : (
+                Object.entries(streams).map(([streamId, streamData]) => (
                   <div key={streamId} className="bg-gray-700 p-4 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
-                      <div>
-                        <h3 className="text-lg font-medium text-white">
-                          {streamData.participantEmail}
-                        </h3>
-                        <p className="text-gray-400 text-sm">
-                          Categoría: {getCategoryName(streamData.participantCategoryId)} | 
-                          Equipo: {streamData.participantTeamId ? `#${streamData.participantTeamId}` : 'Sin asignar'}
-                        </p>
-                      </div>
+                      <h3 className="text-lg font-medium text-white">
+                        {streamData.participantEmail}
+                      </h3>
                       <button
                         onClick={() => stopWatching(streamData.socketId)}
                         className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition"
@@ -821,8 +534,8 @@ export default function MonitorComponent({ user, selectedCategory }: MonitorComp
                       stream={streamData.stream} 
                     />
                   </div>
-                ));
-              })()}
+                ))
+              )}
             </div>
           </div>
         </div>
