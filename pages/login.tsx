@@ -101,62 +101,32 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#111827',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white'
-    }}>
-      <div style={{
-        maxWidth: '400px',
-        width: '100%',
-        padding: '32px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2 style={{
-            marginTop: '24px',
-            fontSize: '30px',
-            fontWeight: 'bold',
-            color: 'white'
-          }}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-800 flex items-center justify-center text-white px-4 py-8">
+      <div className="absolute top-4 right-4 flex flex-col items-end z-20">
+          <img
+            src="./asdu_logo.png"
+            alt="Imagen ASDU"
+            className="w-16 h-16 rounded-2xl border-2 border-gray-200 object-cover"
+          />
+      </div>
+      <div className="max-w-md w-full p-8 flex flex-col gap-6 border-2 border-amber-200 rounded-xl shadow-xl bg-gray-900/60 relative">
+        <div className="text-center">
+          <h2 className="mt-6 text-3xl font-bold text-white">
             Iniciar Sesión
           </h2>
-          <p style={{
-            marginTop: '8px',
-            fontSize: '14px',
-            color: '#9ca3af'
-          }}>
+          <p className="mt-2 text-sm text-gray-400">
             ASDU Hackathon Monitor
           </p>
         </div>
-        
         {/* Mostrar error si existe */}
         {error && (
-          <div style={{
-            backgroundColor: '#dc2626',
-            color: 'white',
-            padding: '16px',
-            borderRadius: '8px',
-            fontSize: '16px',
-            textAlign: 'center',
-            marginBottom: '20px',
-            border: '2px solid #b91c1c',
-            boxShadow: '0 4px 8px rgba(220, 38, 38, 0.3)',
-            fontWeight: 'bold',
-            zIndex: 9999,
-            position: 'relative'
-          }}>
+          <div className="bg-red-600 text-white p-4 rounded-lg text-lg text-center mb-5 border-2 border-red-700 shadow-lg font-bold relative z-10">
             ❌ {error}
           </div>
         )}
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
+          <div className="rounded-xl shadow-lg bg-gray-900/70 p-2 space-y-2">
             <div>
               <label htmlFor="email" className="sr-only">
                 Email
@@ -202,7 +172,7 @@ export default function LoginPage() {
               className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white transition duration-150 ease-in-out ${
                 loading 
                   ? 'bg-gray-600 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                  : 'bg-blue-600 hover:bg-green-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
               }`}
             >
               {loading ? (
