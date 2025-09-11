@@ -74,7 +74,6 @@ export default function LoginPage() {
       
       const status = apiError.response?.status;
       const backendMessage = apiError.response?.data?.error;
-
       let errorMessage = '';
       
       if (status === 401) {
@@ -104,10 +103,14 @@ export default function LoginPage() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#111827',
+      backgroundImage: "url('/img/imagenLogin.png')",
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      color: 'white'
+      color: 'white',
+      padding: '16px'
     }}>
       <div style={{
         maxWidth: '400px',
@@ -115,25 +118,51 @@ export default function LoginPage() {
         padding: '32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: '16px',
+
+        background: 'rgba(17, 24, 39, 0.7)',
+        border: '2px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2 style={{
-            marginTop: '24px',
-            fontSize: '30px',
-            fontWeight: 'bold',
-            color: 'white'
-          }}>
-            Iniciar Sesión
-          </h2>
-          <p style={{
-            marginTop: '8px',
-            fontSize: '14px',
-            color: '#9ca3af'
-          }}>
-            ASDU Hackathon Monitor
-          </p>
-        </div>
+<div style={{ textAlign: 'center' }}>
+  {/* Icono de usuario */}
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: '8px'
+  }}>
+    <div style={{
+      background: '#2563eb',
+      borderRadius: '50%',
+      padding: '12px',
+      boxShadow: '0 2px 8px rgba(37,99,235,0.25)'
+    }}>
+      <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    </div>
+  </div>
+  <h2 style={{
+    marginTop: '24px',
+    fontSize: '30px',
+    fontWeight: 'bold',
+    color: 'white'
+  }}>
+    Iniciar Sesión
+  </h2>
+  <p style={{
+    marginTop: '8px',
+    fontSize: '14px',
+    color: '#9ca3af'
+  }}>
+    ASDU Hackathon Monitor
+  </p>
+</div>
+
         
         {/* Mostrar error si existe */}
         {error && (
@@ -167,7 +196,7 @@ export default function LoginPage() {
                 type="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-400 text-white bg-gray-800 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email"
+                placeholder="Usuario"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -201,7 +230,7 @@ export default function LoginPage() {
               disabled={loading}
               className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white transition duration-150 ease-in-out ${
                 loading 
-                  ? 'bg-gray-600 cursor-not-allowed' 
+                  ? 'bg-gray-900 cursor-not-allowed' 
                   : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
               }`}
             >
@@ -219,7 +248,22 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
+        <div className='mt-6 text-center text-gray-500 text-center'>
+          © {new Date().getFullYear()} ASDU Hackathon. Todos los derechos reservados.
+        </div>
       </div>
+      <style jsx global>{`
+        @keyframes shake {
+          10%, 90% { transform: translateX(-2px); }
+          20%, 80% { transform: translateX(4px); }
+          30%, 50%, 70% { transform: translateX(-8px); }
+          40%, 60% { transform: translateX(8px); }
+        }
+        .animate-shake {
+          animation: shake 0.4s;
+        }
+      `}</style>
     </div>
+
   );
 }
