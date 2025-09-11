@@ -5,7 +5,6 @@ import { useRouter } from 'next/router';
 import axios from 'axios';
 import nookies from 'nookies';
 import { AuthContext } from '../context/AuthContext';
-import asduLogo from './asdu_logo.png';
 
 export default function LoginPage() {
   const [email, setEmail] = useState<string>('');
@@ -105,7 +104,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-800 flex items-center justify-center text-white px-4 py-8">
       <div className="absolute top-4 right-4 flex flex-col items-end z-20">
           <img
-            src="asduLogo.src"
+            src="./asdu_logo.png"
             alt="Imagen ASDU"
             className="w-16 h-16 rounded-2xl border-2 border-gray-200 object-cover"
           />

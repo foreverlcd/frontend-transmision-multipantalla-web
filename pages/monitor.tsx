@@ -12,10 +12,11 @@ interface User {
 
 interface MonitorPageProps {
   user: User;
+  selectedCategory: number | null;
 }
 
-export default function MonitorPage({ user }: MonitorPageProps) {
-  return <MonitorComponent user={user} />;
+export default function MonitorPage({ user, selectedCategory }: MonitorPageProps) {
+  return <MonitorComponent user={user} selectedCategory={selectedCategory} />;
 }
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
@@ -54,10 +55,32 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       };
     }
 
-    // Si todo está bien, pasar los datos del usuario como props
+    // Obtener la categoría de la query string
+    const categoryParam = context.query.category;
+    let selectedCategory: number | null = null;
+
+    if (categoryParam) {
+      const categoryId = parseInt(categoryParam as string, 10);
+      if (!isNaN(categoryId)) {
+        selectedCategory = categoryId;
+      }
+    }
+
+    // Si no hay categoría seleccionada, redirigir a la selección de categoría
+    if (selectedCategory === null) {
+      return {
+        redirect: {
+          destination: '/category-selection',
+          permanent: false,
+        },
+      };
+    }
+
+    // Si todo está bien, pasar los datos del usuario y la categoría como props
     return {
       props: {
         user: response.data.user,
+        selectedCategory: selectedCategory,
       },
     };
 
