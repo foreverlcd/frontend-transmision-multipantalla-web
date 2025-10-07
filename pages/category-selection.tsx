@@ -27,23 +27,16 @@ interface Category {
 // Categorías predefinidas (usando IDs reales de la base de datos)
 const CATEGORIES: Category[] = [
   {
-    id: 0,
-    name: 'Todas las Categorías',
-    description: 'Ver transmisiones de todos los equipos',
-    icon: '🌐',
-    color: 'bg-green-600 hover:bg-green-700'
-  },
-  {
     id: 8,
-    name: 'Desarrollo Frontend',
-    description: 'Transmisiones del equipo de Frontend',
+    name: 'Categoría Alfa',
+    description: 'Transmisiones de la categoría Alfa',
     icon: '🔴',
     color: 'bg-red-600 hover:bg-red-700'
   },
   {
     id: 9,
-    name: 'Desarrollo Backend', 
-    description: 'Transmisiones del equipo de Backend',
+    name: 'Categoría Beta', 
+    description: 'Transmisiones de la categoría Beta',
     icon: '🔵',
     color: 'bg-blue-600 hover:bg-blue-700'
   }
@@ -121,52 +114,54 @@ export default function CategorySelectionPage({ user }: CategorySelectionPagePro
         </div>
 
         {/* Grid de Categorías */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATEGORIES.map((category) => (
-            <div key={category.id} className="relative">
-              <button
-                onClick={() => handleCategorySelect(category.id)}
-                disabled={isLoading}
-                className={`w-full p-6 rounded-xl text-left transition-all duration-300 transform hover:scale-105 ${
-                  selectedCategory === category.id
-                    ? 'ring-4 ring-white ring-opacity-50 scale-105'
-                    : 'hover:shadow-2xl'
-                } ${category.color} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="text-4xl">{category.icon}</div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{category.name}</h3>
-                    <p className="text-gray-100 text-sm">{category.description}</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-sm text-gray-100">
-                    <span>📺</span>
-                    <span>Monitoreo en tiempo real</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-100">
-                    <span>🎯</span>
-                    <span>Filtrado por categoría</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-100">
-                    <span>⚡</span>
-                    <span>Transmisión multipantalla</span>
-                  </div>
-                </div>
-
-                {selectedCategory === category.id && isLoading && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-xl flex items-center justify-center">
-                    <div className="flex items-center space-x-3 text-white">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                      <span>Cargando...</span>
+        <div className="flex justify-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+            {CATEGORIES.map((category) => (
+              <div key={category.id} className="relative">
+                <button
+                  onClick={() => handleCategorySelect(category.id)}
+                  disabled={isLoading}
+                  className={`w-full p-6 rounded-xl text-left transition-all duration-300 transform hover:scale-105 ${
+                    selectedCategory === category.id
+                      ? 'ring-4 ring-white ring-opacity-50 scale-105'
+                      : 'hover:shadow-2xl'
+                  } ${category.color} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="text-4xl">{category.icon}</div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{category.name}</h3>
+                      <p className="text-gray-100 text-sm">{category.description}</p>
                     </div>
                   </div>
-                )}
-              </button>
-            </div>
-          ))}
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 text-sm text-gray-100">
+                      <span>📺</span>
+                      <span>Monitoreo en tiempo real</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-gray-100">
+                      <span>🎯</span>
+                      <span>Filtrado por categoría</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-gray-100">
+                      <span>⚡</span>
+                      <span>Transmisión multipantalla</span>
+                    </div>
+                  </div>
+
+                  {selectedCategory === category.id && isLoading && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-xl flex items-center justify-center">
+                      <div className="flex items-center space-x-3 text-white">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                        <span>Cargando...</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Botón para ver todas las categorías */}
